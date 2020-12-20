@@ -1,20 +1,23 @@
 #!/usr/bin/env bash
 
-github_coordinates=stern/stern
-releases_path="https://api.github.com/repos/${github_coordinates}/releases"
-cmd="curl -s"
-if [ -n "$GITHUB_API_TOKEN" ]; then
-  cmd="$cmd -H 'Authorization: token $GITHUB_API_TOKEN'"
-fi
-cmd="$cmd $releases_path"
+set -o errexit
+set -o nounset
+set -o pipefail
 
-# stolen from https://github.com/rbenv/ruby-build/pull/631/files#diff-fdcfb8a18714b33b07529b7d02b54f1dR942
-function sort_versions() {
-  sed 'h; s/[+-]/./g; s/.p\([[:digit:]]\)/.z\1/; s/$/.z/; G; s/\n/ /' \
-    | LC_ALL=C sort -t. -k 1,1 -k 2,2n -k 3,3n -k 4,4n -k 5,5n | awk '{print $2}'
+gh_org="stern"
+gh_repo="stern"
+
+list_versions() {
+  cmd="curl --silent --location"
+  [ -n "$GITHUB_API_TOKEN" ] && cmd="$cmd --header 'Authorization: token $GITHUB_API_TOKEN'"
+  cmd="$cmd https://api.github.com/repos/$gh_org/$gh_repo/releases"
+
+  eval "$cmd" | grep -oE "tag_name\": *\".{1,15}\"," | sed 's/tag_name\": *\"v*//;s/\",//'
 }
 
-# Fetch all tag names, and get only second column. Then remove all unnecesary characters.
-versions=$(eval "$cmd" | sed -n -e 's/.*"tag_name".*:.*"v\(.*\)",$/\1/p' | sed 's/tag_name\": *\"//;s/\",//' | sort_versions)
-# shellcheck disable=SC2086
-echo $versions
+sort_versions() {
+  sed 'h; s/[+-]/./g; s/.p\([[:digit:]]\)/.z\1/; s/$/.z/; G; s/\n/ /' | \
+    LC_ALL=C sort -t. -k 1,1 -k 2,2n -k 3,3n -k 4,4n -k 5,5n | awk '{print $2}'
+}
+
+list_versions | sort_versions | xargs
